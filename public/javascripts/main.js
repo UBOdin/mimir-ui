@@ -192,38 +192,55 @@ $( document ).ready(function() {
                             origin.tooltipster('content', 'Something went wrong!<br/><br/>'+errormessage);
                         }
                         else {
-                            var tooltip_template = '<table class="table tooltip_table">'+
-                                                  '<tbody>'+
-                                                      '<tr>'+
-                                                          '<th scope="row">Possibilities</th>'+
-                                                          '<td>'+examples+'</td>'+
-                                                      '</tr>'
+                            var tooltip_body = $("<tbody>")
+
+                            tooltip_body.append(
+                                $("<tr>").append(
+                                    $("<th>", {scope: "row"}).html("Possibilities")
+                                ).append(
+                                    $("<td>").html(examples)
+                                )
+                            )
 
                             if(bounds){
-                              tooltip_template +=     '<tr>'+
-                                                          '<th scope="row">Bounds</th>'+
-                                                          '<td class="number">'+bounds+'</td>'+
-                                                      '</tr>'
+                                tooltip_body.append(
+                                    $("<tr>").append(
+                                        $("<th>", {scope: "row"}).html("Bounds")
+                                    ).append(
+                                        $("<td>").html(bounds)
+                                    )
+                                )
                             }
                             if(mean){
-                              tooltip_template +=     '<tr>'+
-                                                          '<th scope="row">Mean</th>'+
-                                                          '<td class="number">'+mean+'</td>'+
-                                                      '</tr>'
+                                tooltip_body.append(
+                                    $("<tr>").append(
+                                        $("<th>", {scope: "row"}).html("Expectation")
+                                    ).append(
+                                        $("<td>").html(mean)
+                                    )
+                                )
                             }
                             if(stddev){
-                              tooltip_template +=     '<tr>'+
-                                                          '<th scope="row">Std. Dev.</th>'+
-                                                          '<td class="number">'+stddev+'</td>'+
-                                                      '</tr>'
+                                tooltip_body.append(
+                                    $("<tr>").append(
+                                        $("<th>", {scope: "row"}).html("Std. Dev.")
+                                    ).append(
+                                        $("<td>").html(stddev)
+                                    )
+                                )
                             }
-                                                      
-                            tooltip_template +=       '<tr>'+
-                                                          '<th scope="row">Reasons</th>'+
-                                                          '<td><ul>'+listify(causes)+'</ul></td>'+
-                                                      '</tr>'+
-                                                  '</tbody>'+
-                                              '</table>';
+
+                            tooltip_body.append(
+                                $("<tr>").append(
+                                    $("<th>", {scope: "row"}).html("Reasons")
+                                ).append(
+                                    $("<td>").append($("<ul>").append(listifyCauses(causes, origin)))
+                                )
+                            )
+                            
+                            var tooltip_template = 
+                                $("<table>", {class: "table tooltip_table"}).append(tooltip_body)
+
                             origin.tooltipster('content', tooltip_template);
                         }
                     });
@@ -288,18 +305,24 @@ $( document ).ready(function() {
                             origin.tooltipster('content', 'Something went wrong!<br/><br/>'+errormessage);
                         }
                         else {
-                            var tooltip_template = '<table class="table tooltip_table">'+
-                                                  '<tbody>'+
-                                                      '<tr>'+
-                                                          '<th scope="row">Confidence</th>'+
-                                                          '<td class="number">'+prob+'</td>'+
-                                                      '</tr>'+
-                                                      '<tr>'+
-                                                          '<th scope="row">Reasons</th>'+
-                                                          '<td><ul>'+ listify(causes) +'</ul></td>'+
-                                                      '</tr>'+
-                                                  '</tbody>'+
-                                              '</table>';
+                            var tooltip_template = 
+                                $("<table>", { class: "table tooltip_table" }).append(
+                                    $("<tbody>").append(
+                                        $("<tr>").append(
+                                            $("<th>", {scope: "row"}).html("Confidence")
+                                        ).append(
+                                            $("<td>", {class: "number"}).html(prob)
+                                        )
+                                    ).append(
+                                        $("<tr>").append(
+                                            $("<th>", {scope: "row"}).html("Reasons")
+                                        ).append(
+                                            $("<td>", {class: "number"}).append(
+                                                $("<ul>").append(listifyCauses(causes, origin))
+                                            )
+                                        )
+                                    )
+                                )
                             origin.tooltipster('content', tooltip_template);
                         }
                     });
@@ -508,6 +531,21 @@ $( document ).ready(function() {
 
     });
 
+    $("#list_repair_ack").click(function(){
+        var command = "FEEDBACK "
+        command += $("#list_repair_model").val()+", "+$("#list_repair_idx").val()
+        var args = $("#list_repair_args").val()
+        if(args != ""){
+            command += " ON "+args
+        }
+        var choice = $(".list_repair_choice").filter("[checked]").val()
+        if(choice === undefined){ alert("ERROR: Nothing selected"); return; }
+        command += " SET "+choice
+
+        console.log("Clicked: "+command)
+
+    });
+
     Mimir.visualization.drawGraph();
 });
 
@@ -515,19 +553,50 @@ $( document ).ready(function() {
 /*
 Utility functions
 */
-function listify(causes) {
+function beginFix(reason)
+{
+    switch(reason.repair.selector){
+        case "list": {
+            $("#list_repair_explain").html(reason.english)
+            $("#list_repair_model").val(reason.source)
+            $("#list_repair_idx").val(reason.varid)
+            $("#list_repair_args").val(reason.args.join(","))
+            for(i = 0; i < reason.repair.values.length; i++){
+                var curr = reason.repair.values[i].choice
+                var checked = (i == 0) ? " checked" : ""
+                console.log("REASON: "+curr)
+                $("#list_repair_list").append(
+                    $("<div>").html(
+                        "<input type='radio' name='list_repair_choice' class='list_repair_choice' value='"+
+                            curr+"'"+checked+">&nbsp;&nbsp;"+curr
+                    )
+                )
+            }
+            $("#list_repair_div").show()
+        } break;
+
+        default:
+            alert("Unknown repair selector "+repair.selector)
+
+    }
+}
+
+function listifyCauses(causes, origin) {
     var result = $("<div>");
-    $.each(causes, function(i, v){
+    $.each(causes, function(i, cause){
+        console.log(cause);
         var approve = $("<a>", {href: "#", class: "ttOption approve", text: "Approve"});
-        var fix = $("<a>", {href: "#", class: "ttOption fix", text: "Fix"});
-        var tag = $("<li>", {class: "paperclip", text: causes[i]['english'] + " |"})
+        var fix = $("<a>", {href: "#", class: "ttOption fix", text: "Fix" })
+                    .click(function() { origin.trigger("click"); beginFix(cause); })
+        var tag = $("<li>", {class: "paperclip", text: causes[i]['english']})
                     .attr("onmouseover", "highlightFlowNode(this)")
                     .attr("onmouseout", "reverthighlight(this)");
-        var lensType = $("<input>").attr("type", "hidden").val(causes[i]['source']);
-        tag.append(approve).append(fix).append(lensType);
+        var modelName = $("<input>").attr("type", "hidden").val(cause.source);
+        tag.append("<br/>").append(approve).append(fix)
+            .append(modelName);
         result.append(tag);
     });
-    return result.html();
+    return result;
 }
 
 function highlightFlowNode(reason){

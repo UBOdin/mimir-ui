@@ -326,6 +326,24 @@ button:hover {
     display:                    none;
 }
 
+.lens_repair_div {
+    position:                   absolute;
+    top:                        100px;
+    left:                       50%;
+    margin-left:                -300px;
+    width:                      600px;
+    height:                     500px;
+    background-color:           #fff;
+    border:                     1px solid #ddd;
+    border-radius:              5px;
+    padding:                    20px 80px;
+    box-shadow:                 1px 1px 1px 0 #222;
+    -moz-box-shadow:            1px 1px 1px 0 #222;
+    -webkit-box-shadow:         1px 1px 1px 0 #222;
+    z-index:                    999;
+    display:                    none;
+}
+
 .circlebutt {
     transition:all              0.2s ease-in-out;
     background-color:           #38a;
