@@ -108,7 +108,7 @@ $( document ).ready(function() {
                 }
 
                 if(!found) {
-                    $("#select_table .divider").before('<li><a class="table_link ">'+element+'</a></li>');
+                    $("#select_table").append('<li><a class="table_link ">'+element.toUpperCase()+'</a></li>');
                 }
             });
         });

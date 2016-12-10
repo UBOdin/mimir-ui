@@ -1,13 +1,15 @@
 package controllers
 
 import java.io.File
+import java.sql.SQLException
 
 import mimir.Database
 import mimir.sql.JDBCBackend
 import mimir.web._
-import mimir.algebra.{QueryNamer, QueryVisualizer, Type, RowIdPrimitive, Typechecker}
+import mimir.algebra.{QueryNamer, QueryVisualizer, Type, RowIdPrimitive, Typechecker, RAException}
 import mimir.sql.{CreateLens, Explain}
 import mimir.util.{JSONBuilder}
+import mimir.parser.ParseException
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
@@ -81,13 +83,14 @@ class Application extends Controller with LazyLogging {
     def writes(tup: (String, String)) = Json.obj("reason" -> tup._1, "lensType" -> tup._2)
   }
 
-  private def prepareDatabase(dbName: String = "ui_demo.db", backend: String = "sqlite"): Database =
+  private def prepareDatabase(dbName: String = default_db, backend: String = "sqlite"): Database =
   {
     var ret =
       backend match {
         case "sqlite" => new Database(new JDBCBackend(backend, "databases/" + dbName))
         case _        => new Database(new JDBCBackend(backend, dbName))
       }
+    this.db_name = dbName
 
     try { 
       ret.backend.open() 
@@ -102,34 +105,35 @@ class Application extends Controller with LazyLogging {
 
     logger.debug(s"Received query $input")
 
-
     val statements = db.parse(input)
-    val results = 
-    statements.map({
+
+    val results = statements.map({
       /*****************************************/           
       case s: Select => {
-        val start = System.nanoTime()
-        val raw = db.sql.convert(s)
-        val rawT = System.nanoTime()
-        val results = db.query(raw)
-        val resultsT = System.nanoTime()
+        try {
+          val start = System.nanoTime()
+          val raw = db.sql.convert(s)
+          val rawT = System.nanoTime()
+          val results = db.query(raw)
+          val resultsT = System.nanoTime()
 
-        println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
-        println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
+          println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
+          println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
 
-        results.open()
-        val wIter: WebIterator = db.generateWebIterator(results)
-        try{
-          wIter.queryFlow = QueryVisualizer.convertToTree(db, raw)
-        } catch {
-          case e: Throwable => {
-            e.printStackTrace()
-            wIter.queryFlow = new OperatorNode("", List(), None)
+          results.open()
+          val wIter: WebIterator = db.generateWebIterator(results)
+          try{
+            wIter.queryFlow = QueryVisualizer.convertToTree(db, raw)
+          } catch {
+            case e: Throwable => {
+              e.printStackTrace()
+              wIter.queryFlow = new OperatorNode("", List(), None)
+            }
           }
-        }
-        results.close()
+          results.close()
 
-        new WebQueryResult(wIter)
+          new WebQueryResult(wIter)
+        } 
       }
       /*****************************************/           
       case s: CreateLens =>
@@ -175,9 +179,9 @@ class Application extends Controller with LazyLogging {
     })
   }
 
-
+  val default_db = "ui_demo.db"
   var db = prepareDatabase()
-  var db_name = ""
+  var db_name = default_db
 
   /*
    * Actions
@@ -240,16 +244,22 @@ class Application extends Controller with LazyLogging {
    * Query handlers
    */
   def query = Action { request =>
+    val form = request.body.asFormUrlEncoded
+    val query = form.get("query")(0)
     try {
       db.backend.open()
-      val form = request.body.asFormUrlEncoded
-      val query = form.get("query")(0)
 
       val (statements, results) = handleStatements(query)
 
       Ok(views.html.index(this, query, results.last, statements.last.toString))
-    }
-    finally {
+    } catch {
+        case e: Throwable => 
+          e.printStackTrace()
+          Ok(views.html.index(this, query, 
+            new WebErrorResult(e.getMessage),
+            query
+          ))
+    } finally {
       db.backend.close()
     }
   }
