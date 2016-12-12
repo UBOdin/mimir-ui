@@ -130,10 +130,10 @@
                             </div>
                             <div class="panel-body">
                                 <p><b>Active Database:</b><br>@app.db_name</p><hr>
-                                <li><p>@iter.count row(s) returned in @iter.executionTime ms, showing top 100</p></li>
-                                <li><p><span style="color:red">Red</span> represents data uncertainty</p></li>
+                                <li>@iter.count row(s) returned in @iter.executionTime ms, showing top 100</li>
+                                <li><span class="red">Red</span> represents data uncertainty</li>
                                 @if(iter.missingRows) {
-                                <li><p class="red">There may be some rows missing from this result</p></li>
+                                <li><span class="red">There may be some rows missing from this result</span></li>
                                 }
                             </div>
                         </div>
@@ -154,7 +154,7 @@
                     <div class="clear"></div>
                 </div>
                 }
-                case WebErrorResult(string) => { <div class="col-xs-12 col-md-12"><pre class="error" style="font-family:Helvetica;">Command Ignored.<br/><br/>@string</pre></div> }
+                case WebErrorResult(string) => { <div class="col-xs-12 col-md-12"><pre class="error" style="font-family:Helvetica;">@string</pre></div> }
             }
         </div>
 
