@@ -181,7 +181,6 @@ $( document ).ready(function() {
                                     stddev = res['stddev']
                                 }
                                 if(res.hasOwnProperty('examples')){
-                                    console.log("Examples");
                                     examples = res['examples']
                                 }
                                 causes = res['reasons']
@@ -540,9 +539,10 @@ $( document ).ready(function() {
         }
         var choice = $(".list_repair_choice").filter("[checked]").val()
         if(choice === undefined){ alert("ERROR: Nothing selected"); return; }
-        command += " SET "+choice
+        command += " SET "+choice+";\n"
+        command += $("#last_query_field").val()
 
-        console.log("Clicked: "+command)
+        console.log("Clicked Fix: \n"+command)
 
     });
 
