@@ -87,7 +87,7 @@ class Application extends Controller with LazyLogging {
 
   private def prepareDatabase(dbName: String = default_db, backend: String = "sqlite"): Database =
   {
-    var ret =
+    var ret: Database =
       backend match {
         case "sqlite" => new Database(new GProMBackend(backend, "databases/" + dbName))
         case _        => new Database(new JDBCBackend(backend, dbName))
@@ -212,17 +212,30 @@ class Application extends Controller with LazyLogging {
   var db = prepareDatabase()
   var db_name = default_db
 
+  def withOpenDB[A](op: (() => A)): A =
+  {
+    try {
+      db.backend.open()
+      db.backend match {
+        case j:JDBCBackend => 
+          j.backend match {
+            case "sqlite" => j.enableInlining(db)
+            case _ => ()
+          }
+      }
+      return op()
+    } finally {
+      db.backend.close()
+    }
+  }
+
   /*
    * Actions
    */
   def index = Action {
-    try {
-      db.backend.open()
+    withOpenDB { () =>
       val result: WebResult = new WebStringResult("Query results show up here...")
       Ok(views.html.index(this, "", result, ""))
-    }
-    finally {
-      db.backend.close()
     }
   }
 
@@ -239,13 +252,9 @@ class Application extends Controller with LazyLogging {
       prepareDatabase(newDBName)
     }
 
-    try {
-      db.backend.open()
+    withOpenDB { () =>
       Ok(views.html.index(this, "",
         new WebStringResult("Working database changed to "+newDBName), ""))
-    }
-    finally {
-      db.backend.close()
     }
 
   }
@@ -257,14 +266,10 @@ class Application extends Controller with LazyLogging {
 
     prepareDatabase(newDBName)
 
-    try {
-      db.backend.open()
+    withOpenDB { () => 
       db.initializeDBForMimir()
       Ok(views.html.index(this, "",
         new WebStringResult("Database "+newDBName+" successfully created."), ""))
-    }
-    finally {
-      db.backend.close()
     }
 
   }
@@ -275,98 +280,81 @@ class Application extends Controller with LazyLogging {
   def query = Action { request =>
     val form = request.body.asFormUrlEncoded
     val query = form.get("query")(0)
-    try {
-      db.backend.open()
-
-      val (statements, results) = handleStatements(query)
-
-      Ok(views.html.index(this, query, results.last, statements.last.toString))
-    } catch {
-        case e: Throwable => 
-          e.printStackTrace()
-          Ok(views.html.index(this, query, 
-            new WebErrorResult(e.getMessage),
-            query
-          ))
-    } finally {
-      db.backend.close()
+    withOpenDB { () =>
+      try {
+        val (statements, results) = handleStatements(query)
+        Ok(views.html.index(this, query, results.last, statements.last.toString))
+      } catch {
+          case e: Throwable => 
+            e.printStackTrace()
+            Ok(views.html.index(this, query, 
+              new WebErrorResult(e.getMessage),
+              query
+            ))
+      }
     }
   }
 
   def nameForQuery(queryString: String) = Action {
-    try {
-      db.backend.open()
+    withOpenDB { () => 
+      try {
+        val querySql = db.parse(queryString).last.asInstanceOf[Select]
+        val queryRA = db.sql.convert(querySql)
+        val name = QueryNamer.nameQuery(db.optimize(queryRA))
 
-      val querySql = db.parse(queryString).last.asInstanceOf[Select]
-      val queryRA = db.sql.convert(querySql)
-      val name = QueryNamer.nameQuery(db.optimize(queryRA))
+        Ok(
+          Json.obj(
+            "result" -> name
+          )
+        );
 
-      Ok(
-        Json.obj(
-          "result" -> name
-        )
-      );
-
-    } catch {
-      case e: Throwable => {
-        e.printStackTrace()
-        InternalServerError("ERROR: "+e.getMessage())
+      } catch {
+        case e: Throwable => {
+          e.printStackTrace()
+          InternalServerError("ERROR: "+e.getMessage())
+        }
       }
-    }
-    finally {
-      db.backend.close()
     }
   }
 
   def schemaForQuery(queryString: String) = Action {
-    try {
-      db.backend.open()
-      
-      val querySql = db.parse(queryString).last.asInstanceOf[Select]
-      val queryRA = db.sql.convert(querySql)
+    withOpenDB { () => 
+      try {
+        val querySql = db.parse(queryString).last.asInstanceOf[Select]
+        val queryRA = db.sql.convert(querySql)
 
-      val schema = 
-        JSONBuilder.list(db.bestGuessSchema(queryRA).map({
-            case (name, t) => JSONBuilder.dict(Map(
-              "name" -> JSONBuilder.string(name),
-              "type" -> JSONBuilder.string(Type.toString(t)) 
-              ))
-            })
-          )
+        val schema = 
+          JSONBuilder.list(db.bestGuessSchema(queryRA).map({
+              case (name, t) => JSONBuilder.dict(Map(
+                "name" -> JSONBuilder.string(name),
+                "type" -> JSONBuilder.string(Type.toString(t)) 
+                ))
+              })
+            )
 
-      Ok(schema)
+        Ok(schema)
 
-    } catch {
-      case e: Throwable => {
-        e.printStackTrace()
-        InternalServerError("ERROR: "+e.getMessage())
+      } catch {
+        case e: Throwable => {
+          e.printStackTrace()
+          InternalServerError("ERROR: "+e.getMessage())
+        }
       }
-    }
-    finally {
-      db.backend.close()
     }
   }
 
   def queryGet(query: String) = Action {
-    try {
-      db.backend.open()
+    withOpenDB { () => 
       val (statements, results) = handleStatements(query)
       Ok(views.html.index(this, query, results.last, statements.last.toString))
-    }
-    finally {
-      db.backend.close()
     }
   }
 
   def queryJson(query: String) = Action {
-    try {
-      db.backend.open()
+    withOpenDB { () => 
       val (statements, results) = handleStatements(query)
 
       Ok(Json.toJson(results.last))
-    }
-    finally {
-      db.backend.close()
     }
   }
 
@@ -376,26 +364,21 @@ class Application extends Controller with LazyLogging {
    */
   def loadTable = Action(parse.multipartFormData) { request =>
 //    webAPI.synchronized(
-    try {
-      db.backend.open()
+    withOpenDB { () => 
 
       request.body.file("file").map { csvFile =>
-      val name = csvFile.filename
-      val dir = play.Play.application().path().getAbsolutePath
+        val name = csvFile.filename
+        val dir = play.Play.application().path().getAbsolutePath
 
-      val newFile = new File(dir, name)
-      csvFile.ref.moveTo(newFile, true)
-      db.loadTable(name)
-      newFile.delete()
-    }
+        val newFile = new File(dir, name)
+        csvFile.ref.moveTo(newFile, true)
+        db.loadTable(name)
+        newFile.delete()
+      }
 
       val result: WebResult = new WebStringResult("CSV file loaded.")
       Ok(views.html.index(this, "", result, ""))
     }
-    finally {
-      db.backend.close()
-    }
-//    )
   }
 
 
@@ -407,9 +390,7 @@ class Application extends Controller with LazyLogging {
   }
 
   def getRowExplain(query: String, row: String) = Action {
-    try {
-      db.backend.open()
-
+    withOpenDB { () => 
       db.parse(query).last match {
         case s:Select => {
           val oper = db.sql.convert(s)
@@ -422,13 +403,10 @@ class Application extends Controller with LazyLogging {
           BadRequest("Not A Query: "+query)
       }
     }
-    finally {
-      db.backend.open()
-    }
   }
 
   def getColExplain(query: String, row: String, colIndexString: String) = Action {
-    try {
+    withOpenDB { () => 
       db.backend.open()
 
       val colIndex = Integer.parseInt(colIndexString)
@@ -446,9 +424,5 @@ class Application extends Controller with LazyLogging {
           BadRequest("Not A Query: "+query)
       }
     }
-    finally {
-      db.backend.open()
-    }
-
   }
 }
