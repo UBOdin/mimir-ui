@@ -19,7 +19,13 @@ libraryDependencies ++= Seq(
   "info.mimirdb" % "jsqlparser" % "1.0.0"
 )
 
+unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
+unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
+
+includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
+
 resolvers += "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository"
+resolvers += Resolver.mavenLocal
 resolvers += "scalaz-bintray" at "http://dl.bintray.com/scalaz/releases"
 resolvers += "MimirDB" at "http://maven.mimirdb.info/"
 

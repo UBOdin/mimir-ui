@@ -4,6 +4,7 @@ import java.io.File
 import java.sql.SQLException
 
 import mimir.Database
+import mimir.sql.GProMBackend
 import mimir.sql.JDBCBackend
 import mimir.web._
 import mimir.algebra.{QueryNamer, QueryVisualizer, Type, RowIdPrimitive, Typechecker, RAException}
@@ -21,6 +22,7 @@ import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
 import net.sf.jsqlparser.statement.delete.Delete
 import net.sf.jsqlparser.statement.drop.Drop
+import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
 
 /*
  * This is the entry-point to the Web Interface.
@@ -87,7 +89,7 @@ class Application extends Controller with LazyLogging {
   {
     var ret =
       backend match {
-        case "sqlite" => new Database(new JDBCBackend(backend, "databases/" + dbName))
+        case "sqlite" => new Database(new GProMBackend(backend, "databases/" + dbName))
         case _        => new Database(new JDBCBackend(backend, dbName))
       }
     this.db_name = dbName
@@ -110,6 +112,33 @@ class Application extends Controller with LazyLogging {
     val results = statements.map({
       /*****************************************/           
       case s: Select => {
+        try {
+          val start = System.nanoTime()
+          val raw = db.sql.convert(s)
+          val rawT = System.nanoTime()
+          val results = db.query(raw)
+          val resultsT = System.nanoTime()
+
+          println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
+          println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
+
+          results.open()
+          val wIter: WebIterator = db.generateWebIterator(results)
+          try{
+            wIter.queryFlow = QueryVisualizer.convertToTree(db, raw)
+          } catch {
+            case e: Throwable => {
+              e.printStackTrace()
+              wIter.queryFlow = new OperatorNode("", List(), None)
+            }
+          }
+          results.close()
+
+          new WebQueryResult(wIter)
+        } 
+      }
+      /*****************************************/
+      case s: ProvenanceStatement => {
         try {
           val start = System.nanoTime()
           val raw = db.sql.convert(s)
