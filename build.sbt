@@ -2,7 +2,7 @@ name := "mimirwebapp"
 
 version := "0.2"
 
-scalaVersion := "2.10.5"
+scalaVersion := "2.11.11"
 
 lazy val mimircore = project
 
@@ -15,14 +15,14 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   specs2 % Test,
-  "info.mimirdb" %% "mimir-core" % "0.2-SNAPSHOT",
-  "info.mimirdb" % "jsqlparser" % "1.0.0"
+  "info.mimirdb" %% "mimir-core" % "0.2",
+  "info.mimirdb" % "jsqlparser" % "1.0.2"
 )
 
 unmanagedResourceDirectories in Compile += baseDirectory.value / "lib_extra"
-unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "conf") }
-
-includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib"
+includeFilter in (Compile, unmanagedResourceDirectories):= ".dylib,.dll,.so"
+unmanagedClasspath in Runtime += baseDirectory.value / "conf"
+unmanagedResourceDirectories in Test += baseDirectory.value / "conf"
 
 resolvers += "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository"
 resolvers += Resolver.mavenLocal

@@ -4,6 +4,7 @@ import java.io.File
 import java.sql.SQLException
 
 import mimir.Database
+import mimir.sql.InlinableBackend
 import mimir.sql.GProMBackend
 import mimir.sql.JDBCBackend
 import mimir.web._
@@ -22,7 +23,8 @@ import net.sf.jsqlparser.statement.select.Select
 import net.sf.jsqlparser.statement.update.Update
 import net.sf.jsqlparser.statement.delete.Delete
 import net.sf.jsqlparser.statement.drop.Drop
-import net.sf.jsqlparser.statement.provenance.ProvenanceStatement
+import mimir.sql.ProvenanceStatement
+import scala.collection.mutable.ListBuffer
 
 /*
  * This is the entry-point to the Web Interface.
@@ -87,15 +89,29 @@ class Application extends Controller with LazyLogging {
 
   private def prepareDatabase(dbName: String = default_db, backend: String = "sqlite"): Database =
   {
-    var ret: Database =
-      backend match {
-        case "sqlite" => new Database(new GProMBackend(backend, "databases/" + dbName))
-        case _        => new Database(new JDBCBackend(backend, dbName))
-      }
-    this.db_name = dbName
-
-    try { 
-      ret.backend.open() 
+    var ret: Database = null
+    try {  
+      ret = backend match {
+         case "sqlite" => {
+            if(true){
+              // Set up the database connection(s)
+              val tdb = new Database(new JDBCBackend(backend, "databases/" + dbName))
+              tdb.backend.open() 
+              tdb
+            }
+            else {
+              //Use GProM Backend
+              val gp = new GProMBackend(backend, "databases/" + dbName, -1)
+              val tdb = new Database(gp)    
+              tdb.backend.open()
+              gp.metadataLookupPlugin.db = tdb
+              tdb
+            }
+          }
+          case _ => new Database(new JDBCBackend(backend, dbName))
+        }
+      this.db_name = dbName
+      //ret.backend.asInstanceOf[InlinableBackend].enableInlining(db)
       ret.initializeDBForMimir()
     } finally {
       ret.backend.close()
@@ -112,18 +128,15 @@ class Application extends Controller with LazyLogging {
     val results = statements.map({
       /*****************************************/           
       case s: Select => {
-        try {
-          val start = System.nanoTime()
-          val raw = db.sql.convert(s)
-          val rawT = System.nanoTime()
-          val results = db.query(raw)
-          val resultsT = System.nanoTime()
-
+        val start = System.nanoTime()
+        val raw = db.sql.convert(s)
+        val rawT = System.nanoTime()
+        
+        val resultsT = System.nanoTime()
           println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
           println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
 
-          results.open()
-          val wIter: WebIterator = db.generateWebIterator(results)
+          val wIter: WebIterator = generateWebIterator(raw)
           try{
             wIter.queryFlow = QueryVisualizer.convertToTree(db, raw)
           } catch {
@@ -132,37 +145,31 @@ class Application extends Controller with LazyLogging {
               wIter.queryFlow = new OperatorNode("", List(), None)
             }
           }
-          results.close()
-
-          new WebQueryResult(wIter)
-        } 
+          
+          new WebQueryResult(wIter)       
       }
       /*****************************************/
       case s: ProvenanceStatement => {
-        try {
-          val start = System.nanoTime()
-          val raw = db.sql.convert(s)
-          val rawT = System.nanoTime()
-          val results = db.query(raw)
-          val resultsT = System.nanoTime()
+        val start = System.nanoTime()
+        val raw = db.sql.convert(s)
+        val rawT = System.nanoTime()
+        val resultsT = System.nanoTime()
 
-          println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
-          println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
+        println("Convert time: "+((rawT-start)/(1000*1000))+"ms")
+        println("Compile time: "+((resultsT-rawT)/(1000*1000))+"ms")
 
-          results.open()
-          val wIter: WebIterator = db.generateWebIterator(results)
-          try{
-            wIter.queryFlow = QueryVisualizer.convertToTree(db, raw)
-          } catch {
-            case e: Throwable => {
-              e.printStackTrace()
-              wIter.queryFlow = new OperatorNode("", List(), None)
-            }
+        val wIter: WebIterator = generateWebIterator(raw)
+        try{
+          wIter.queryFlow = QueryVisualizer.convertToTree(db, raw)
+        } catch {
+          case e: Throwable => {
+            e.printStackTrace()
+            wIter.queryFlow = new OperatorNode("", List(), None)
           }
-          results.close()
-
-          new WebQueryResult(wIter)
-        } 
+        }
+        
+        new WebQueryResult(wIter)
+        
       }
       /*****************************************/           
       case s: CreateLens =>
@@ -171,7 +178,7 @@ class Application extends Controller with LazyLogging {
       /*****************************************/           
       case s: Explain => {
         val raw = db.sql.convert(s.getSelectBody());
-        val op = db.optimize(raw)
+        val op = db.compiler.optimize(raw)
         val res = "------ Raw Query ------\n"+
           raw.toString()+"\n"+
           "--- Optimized Query ---\n"+
@@ -197,7 +204,7 @@ class Application extends Controller with LazyLogging {
 
   def allSchemas: Seq[(String, Seq[(String, Type)])] = {
     db.getAllTables.toList.
-      map{ (x) => (x, db.bestGuessSchema(db.getTableOperator(x))) }.
+      map{ (x) =>   (x, db.tableSchema(x).get) }.
       sortBy(_._1)
   }
 
@@ -217,11 +224,7 @@ class Application extends Controller with LazyLogging {
     try {
       db.backend.open()
       db.backend match {
-        case j:JDBCBackend => 
-          j.backend match {
-            case "sqlite" => j.enableInlining(db)
-            case _ => ()
-          }
+        case j:InlinableBackend => j.enableInlining(db)
       }
       return op()
     } finally {
@@ -278,6 +281,7 @@ class Application extends Controller with LazyLogging {
    * Query handlers
    */
   def query = Action { request =>
+    println(request.body.asFormUrlEncoded)
     val form = request.body.asFormUrlEncoded
     val query = form.get("query")(0)
     withOpenDB { () =>
@@ -300,7 +304,7 @@ class Application extends Controller with LazyLogging {
       try {
         val querySql = db.parse(queryString).last.asInstanceOf[Select]
         val queryRA = db.sql.convert(querySql)
-        val name = QueryNamer.nameQuery(db.optimize(queryRA))
+        val name = QueryNamer.nameQuery(db.compiler.optimize(queryRA))
 
         Ok(
           Json.obj(
@@ -345,6 +349,7 @@ class Application extends Controller with LazyLogging {
 
   def queryGet(query: String) = Action {
     withOpenDB { () => 
+      println(query)
       val (statements, results) = handleStatements(query)
       Ok(views.html.index(this, query, results.last, statements.last.toString))
     }
@@ -360,7 +365,7 @@ class Application extends Controller with LazyLogging {
 
 
   /**
-   * Load CSV data handler
+   * Load CSV data handlerƒ
    */
   def loadTable = Action(parse.multipartFormData) { request =>
 //    webAPI.synchronized(
@@ -414,7 +419,7 @@ class Application extends Controller with LazyLogging {
       db.parse(query).last match {
         case s:Select => {
           val oper = db.sql.convert(s)
-          val schema = Typechecker.schemaOf(oper)
+          val schema = db.bestGuessSchema(oper)
           val explanation = 
             db.explainCell(oper, RowIdPrimitive(row), schema(colIndex)._1)
 
@@ -424,5 +429,34 @@ class Application extends Controller with LazyLogging {
           BadRequest("Not A Query: "+query)
       }
     }
+  }
+  
+  def generateWebIterator(oper: mimir.algebra.Operator): WebIterator =
+  {
+    db.query(oper)(results => {
+      val startTime = System.nanoTime()
+      // println("SCHEMA: "+result.schema)
+      val headers: List[String] = "MIMIR_ROWID" :: results.schema.map(_._1).toList
+      val data: ListBuffer[(List[String], Boolean)] = new ListBuffer()
+  
+      var i = 0
+      while(results.hasNext()){
+        val row = results.next()
+        val list =
+          (
+            row.provenance.payload.toString ::
+              results.schema.zipWithIndex.map( _._2).map( (i) => {
+                row(i).toString + (if (!row.isColDeterministic(i)) {"*"} else {""})
+              }).toList
+          )
+  
+       // println("RESULTS: "+list)
+        if(i < 100) data.append((list, row.isDeterministic()))
+        i = i + 1
+      }
+  
+      val executionTime = (System.nanoTime() - startTime) / (1 * 1000 * 1000)
+      new WebIterator(headers, data.toList, i, false, executionTime)
+    })
   }
 }
