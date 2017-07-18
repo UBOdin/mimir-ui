@@ -25,6 +25,8 @@ import net.sf.jsqlparser.statement.delete.Delete
 import net.sf.jsqlparser.statement.drop.Drop
 import mimir.sql.ProvenanceStatement
 import scala.collection.mutable.ListBuffer
+import mimir.ctables.GenericCellExplanation
+import mimir.ctables.RowExplanation
 
 /*
  * This is the entry-point to the Web Interface.
@@ -394,40 +396,64 @@ class Application extends Controller with LazyLogging {
     Ok(Json.toJson(allDatabases))
   }
 
-  def getRowExplain(query: String, row: String) = Action {
+  def getRowExplain(query: String, rowString: String) = Action {
     withOpenDB { () => 
-      db.parse(query).last match {
-        case s:Select => {
-          val oper = db.sql.convert(s)
-          val explanation = 
-            db.explainRow(oper, RowIdPrimitive(row))
-
-          Ok(explanation.toJSON)
-        }
-        case _ => 
+     db.backend.open()
+      try {
+        println("explainRow: From UI: [ "+ rowString +" ] [" + query + "]"  ) ;
+        val oper = db.compiler.optimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+        val rowidprim = RowIdPrimitive(rowString)
+        val cols = oper.columnNames
+        val reasons = db.explainer.getFocusedReasons(db.explainer.explainSubset(
+              db.explainer.filterByProvenance(oper,rowidprim), 
+              Seq().toSet, true, false))
+        Ok(
+            RowExplanation(
+        			0.0,
+        			reasons.toList,
+    					rowidprim)
+    			.toJSON)
+      } catch {
+        case t: Throwable => {
+          t.printStackTrace() // TODO: handle error
           BadRequest("Not A Query: "+query)
+        }
       }
     }
   }
 
-  def getColExplain(query: String, row: String, colIndexString: String) = Action {
+  def getColExplain(query: String, rowString: String, colIndexString: String) = Action {
     withOpenDB { () => 
       db.backend.open()
 
-      val colIndex = Integer.parseInt(colIndexString)
-
-      db.parse(query).last match {
-        case s:Select => {
-          val oper = db.sql.convert(s)
-          val schema = db.bestGuessSchema(oper)
-          val explanation = 
-            db.explainCell(oper, RowIdPrimitive(row), schema(colIndex)._1)
-
-          Ok(explanation.toJSON)
+      try {
+        println("explainCell: From UI: [" + colIndexString + "] [ "+ rowString +" ] [" + query + "]"  ) ;
+        val col = Integer.parseInt(colIndexString)
+        val oper = db.compiler.optimize(db.sql.convert(db.parse(query).head.asInstanceOf[Select]))
+        val cols = oper.columnNames
+        val rowidprim = RowIdPrimitive(rowString)
+        val provFilteredOper = db.explainer.filterByProvenance(oper,rowidprim)
+        val subsetReasons = db.explainer.explainSubset(
+                provFilteredOper, 
+                Seq(cols(col)).toSet, false, false)
+        val reasons = db.explainer.getFocusedReasons(subsetReasons)
+        Ok(
+            GenericCellExplanation(
+    					reasons.map(reason => reason.repair match { 
+    					  case mimir.ctables.RepairFromList(choices) => choices.map(_._1)
+    					  case mimir.ctables.RepairByType(t) => reason.hints
+    					  case x => Seq(mimir.algebra.StringPrimitive(x.exampleString))
+    					  }).flatten.toList,
+    					reasons.toList,
+    					rowidprim,
+    					cols(col)
+				  ).toJSON)
+      } catch {
+          case t: Throwable => {
+            t.printStackTrace() // TODO: handle error
+            BadRequest("Not A Query: "+query)
+          }
         }
-        case _ => 
-          BadRequest("Not A Query: "+query)
-      }
     }
   }
   
@@ -459,4 +485,5 @@ class Application extends Controller with LazyLogging {
       new WebIterator(headers, data.toList, i, false, executionTime)
     })
   }
+  
 }

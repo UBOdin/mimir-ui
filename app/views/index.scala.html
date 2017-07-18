@@ -112,6 +112,8 @@
                                 <li><button id="type_inference_btn" class="lens_btn">Type Inference</button></li>
                                 <li><button id="missing_value_btn" class="lens_btn">Missing Value</button></li>
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
+								<li><button id="missing_key_btn" class="lens_btn">Missing Key</button></li>
+								<li><button id="comment_btn" class="lens_btn">Comment</button></li>
                             </ul>
                         </div>
                         <div class="dropdown">
@@ -219,6 +221,37 @@
             <br>
             <br>
             <button id="sm_lens_create_btn" class="lens_btn">CREATE</button>
+        </div>
+
+		<div id="mk_lens_div" class="lens_create_div">
+            <h3>Missing Key Lens</h3>
+            <p class="lens_desc">Create a lens to find missing values for an sequence attribute</p>
+            <hr>
+            <input type="text" class="form-control" id="mk_lens_name" placeholder="Lens name">
+            <br>
+            <label for="mk_lens_param">Attributes</label>
+            <select id="mk_lens_param" class="form-control" multiple></select>
+            <br>
+            <button id="mk_lens_create_btn" class="lens_btn">CREATE</button>
+        </div>
+
+		<div id="comment_lens_div" class="lens_create_div">
+            <h3>Comment Lens</h3>
+            <p class="lens_desc">Create a lens to add an attribute from an expression and add an uncertainty annotation with a provided comment as the reason</p>
+            <hr>
+            <input type="text" class="form-control" id="comment_lens_name" placeholder="Lens name">
+            <br>
+            <label for="comment_lens_param_l">Expression</label>
+            <p>The expression can have standard arithmatic operators and vars from current table/view</p>
+            <input type="text" id="comment_lens_param_expr" >
+            <br>
+                 
+			<label for="comment_lens_param_l">Comment</label>
+            <p>An explanation for why the above experssion makes the added attribute uncertain.</p>
+            <input type="text" id="comment_lens_param_comment" >   
+            <br>
+            <br>
+            <button id="comment_lens_create_btn" class="lens_btn">CREATE</button>
         </div>
 
         <div id="list_repair_div" class="lens_repair_div">
