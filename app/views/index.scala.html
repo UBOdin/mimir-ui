@@ -114,6 +114,8 @@
                                 <li><button id="schema_matching_btn" class="lens_btn" style="margin-bottom:2px;">Schema Matching</button></li>
 								<li><button id="missing_key_btn" class="lens_btn">Missing Key</button></li>
 								<li><button id="comment_btn" class="lens_btn">Comment</button></li>
+								<li><button id="key_repair_btn" class="lens_btn">Key Repair</button></li>
+								<li><button id="picker_btn" class="lens_btn">Picker</button></li>
                             </ul>
                         </div>
                         <div class="dropdown">
@@ -252,6 +254,62 @@
             <br>
             <br>
             <button id="comment_lens_create_btn" class="lens_btn">CREATE</button>
+        </div>
+
+		<div id="key_repair_lens_div" class="lens_create_div">
+            <h3>Key Repair Lens</h3>
+            <p class="lens_desc">Create a lens to merge tuples with the the same key</p>
+            <hr>
+            <input type="text" class="form-control" id="key_repair_lens_name" placeholder="Lens name">
+            <br>
+            <label for="key_repair_lens_param">Attributes</label>
+            <select id="key_repair_lens_param" class="form-control" multiple></select>
+            <br>
+            <button id="key_repair_lens_create_btn" class="lens_btn">CREATE</button>
+        </div>
+
+		<div id="picker_lens_div" class="lens_create_div">
+            <h3>Picker Lens</h3>
+            <p class="lens_desc">Create a lens that uses a set of expressions to choose a value for an added attribute</p>
+            <hr>
+            <input type="text" class="form-control" id="picker_lens_name" placeholder="Lens name">
+            <br>
+			<table style="width:100%; border-collapse: separate; border-spacing: 8px;" >
+				<tr>
+					<td>
+						<label for="picker_lens_param_pick_from">Pick From</label>
+			            <p>The attributes to choose from</p>
+			            <select id="picker_lens_param_pick_from" class="form-control" multiple></select>
+		            </td>
+					<td>
+						<label for="picker_lens_param_pick_from_hide">Pick From To Hide</label>
+			            <p>Pick From attributes to hide</p>
+			            <select id="picker_lens_param_pick_from_hide" class="form-control" multiple></select>
+		            </td>
+				</tr>
+				<tr>
+					<td colspan="2">
+						<label for="picker_lens_param_pick_as">Pick As</label>
+			            <p>The name of the result attribute that will be added (Optional)</p>
+			            <input type="text" id="picker_lens_param_pick_as" class="form-control">
+					</td>
+				</tr>
+				<tr>
+					<td>
+			            <label for="picker_lens_param_exprs">Expressions and Results</label>
+			            <p>Expressions to choose value for result attribute and DO NOT mark as uncertain.</p>
+			            <textarea id="picker_lens_param_exprs" class="form-control"></textarea>
+		            </td>
+					<td>
+						<label for="picker_lens_param_uexprs">Expressions and Uncertain Results</label>
+			            <p>Expressions to choose value for result attribute and mark as uncertain.</p>
+			            <textarea id="picker_lens_param_uexprs" class="form-control"></textarea>  
+		            </td>
+				</tr>
+			</table>
+            <br>
+			    
+            <button id="picker_lens_create_btn" class="lens_btn">CREATE</button>
         </div>
 
         <div id="list_repair_div" class="lens_repair_div">

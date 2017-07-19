@@ -567,6 +567,118 @@ $( document ).ready(function() {
         $("#query_textarea").val(query);
         $("#query_btn").trigger("click");
     });
+    
+    $("#key_repair_btn").click( function() {
+        get_query_name(function(name) {
+            $("#key_repair_lens_name").val(name+"KEYREPAIR");
+            $("#black-box").show();
+            $("#key_repair_lens_div").show();
+
+            var dropdown = $("#key_repair_lens_param");
+            if(dropdown.children("option").length <= 0) {
+                $("#result_table").children("thead").children().children().not(".rowid_col, .row_selector").each( function () {
+                    dropdown.append($("<option />").val($(this).html()).text($(this).html()));
+                });
+            }
+
+            $("#black-box").click( function() {
+                $("#key_repair_lens_div").hide();
+                $(this).hide();
+            });
+        })
+    });
+    
+    $("#key_repair_lens_create_btn").click( function() {
+        var name = $("#key_repair_lens_name").val();
+        if(name === "") {
+            alert("Please enter a name for the lens");
+            return;
+        }
+
+        var param = $("#key_repair_lens_param").val();
+        param = param.map( function (val) {
+            return val;
+        });
+
+        var subquery = $("#last_query_field").val();
+        var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH KEY_REPAIR("+param+");"
+
+        var select = "SELECT * FROM "+name+";"
+        var query = createlens+"\n"+select;
+
+        $("#query_textarea").val(query);
+        $("#query_btn").trigger("click");
+    });
+    
+    $("#picker_btn").click( function() {
+        get_query_name(function(name) {
+            $("#picker_lens_name").val(name+"PICKER");
+            $("#black-box").show();
+            $("#picker_lens_div").show();
+
+            var dropdown = $("#picker_lens_param_pick_from");
+            if(dropdown.children("option").length <= 0) {
+                $("#result_table").children("thead").children().children().not(".rowid_col, .row_selector").each( function () {
+                    dropdown.append($("<option />").val($(this).html()).text($(this).html()));
+                });
+            }
+            var dropdown2 = $("#picker_lens_param_pick_from_hide");
+            if(dropdown2.children("option").length <= 0) {
+                $("#result_table").children("thead").children().children().not(".rowid_col, .row_selector").each( function () {
+                    dropdown2.append($("<option />").val($(this).html()).text($(this).html()));
+                });
+            }
+
+            $("#black-box").click( function() {
+                $("#picker_lens_div").hide();
+                $(this).hide();
+            });
+        })
+    });
+    
+    $("#picker_lens_create_btn").click( function() {
+        var name = $("#picker_lens_name").val();
+        if(name === "") {
+            alert("Please enter a name for the lens");
+            return;
+        }
+
+        var fromAttrs = $("#picker_lens_param_pick_from").val();
+        fromAttrs = fromAttrs.map( function (val) {
+            return val;
+        });
+        fromAttrs = fromAttrs.join() ? "PICK_FROM(" + fromAttrs.join() + ")" : "";
+        
+        var pickAs = $("#picker_lens_param_pick_as").val();
+        pickAs = pickAs ? "PICK_AS(" + pickAs + ")" : "";
+        	
+        var hideFrom = $("#picker_lens_param_pick_from_hide").val();
+        hideFrom = hideFrom.map( function (val) {
+            return val;
+        });
+        hideFrom = hideFrom.join() ? "HIDE_PICK_FROM(" + hideFrom.join() + ")" : "";
+        
+        var exprs = $("#picker_lens_param_exprs").val();
+        exprs = exprs ? exprs.split("\n").map( function (val) {
+            return "EXPRS(" + val + ")" ;
+        }) : "";
+        
+        var uexprs = $("#picker_lens_param_uexprs").val();
+        uexprs = uexprs ? uexprs.split("\n").map( function (val) {
+            return "UEXPRS(" + val + ")" ;
+        }) : "";
+        
+        var param = ((fromAttrs ? fromAttrs + ", " : "") + (pickAs ? pickAs + ", " : "") + (hideFrom ? hideFrom + ", " : "") + (exprs ? exprs + ", " : "") + uexprs + ",").slice(0, -1);
+        
+        var subquery = $("#last_query_field").val();
+        var createlens = "CREATE LENS "+name+" AS "+subquery+" WITH PICKER("+param+");"
+
+        var select = "SELECT * FROM "+name+";"
+        var query = createlens+"\n"+select;
+
+        $("#query_textarea").val(query);
+        $("#query_btn").trigger("click");
+    });
 
     // assigns a value to each item in the list to later be used
     // to findout which one was selected
